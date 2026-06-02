@@ -1,0 +1,93 @@
+{
+  "categories": [
+    {
+      "slug": "landscapes",
+      "name": "Landscapes",
+      "description": "Scenic wonders, mountains, seascapes, and natural light studies."
+    },
+    {
+      "slug": "portraits",
+      "name": "Portraits",
+      "description": "Human stories, studio lighting, and fine-art editorial portraits."
+    },
+    {
+      "slug": "street",
+      "name": "Street & Urban",
+      "description": "Candid cityscapes, night studies, and neon-soaked architecture."
+    }
+  ],
+  "images": [
+    {
+      "id": "landscape-1",
+      "filename": "unsplash-coast.jpg",
+      "url": "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80",
+      "title": "Golden Hour Coastline",
+      "description": "Savoring the final rays of light reflecting off the moving tide. Shot on medium format film, Amalfi Coast, Italy.",
+      "category": "landscapes",
+      "width": 1200,
+      "height": 800,
+      "dateAdded": "2026-05-31T21:30:00.000Z",
+      "order": 0
+    },
+    {
+      "id": "portrait-1",
+      "filename": "unsplash-portrait.jpg",
+      "url": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=1200&q=80",
+      "title": "Reflections of Youth",
+      "description": "A natural light portrait capturing quiet introspection and soft shadows. Editorial series, Studio Session, Paris.",
+      "category": "portraits",
+      "width": 1200,
+      "height": 1500,
+      "dateAdded": "2026-05-31T21:31:00.000Z",
+      "order": 1
+    },
+    {
+      "id": "street-1",
+      "filename": "unsplash-street.jpg",
+      "url": "https://images.unsplash.com/photo-1514565131-fce0801e5785?auto=format&fit=crop&w=1200&q=80",
+      "title": "Electric Solitude",
+      "description": "Navigating the silent neon-soaked alleyways during a late-night drizzle. Shinjuku, Tokyo, Japan.",
+      "category": "street",
+      "width": 1200,
+      "height": 900,
+      "dateAdded": "2026-05-31T21:32:00.000Z",
+      "order": 2
+    },
+    {
+      "id": "k1jfenj2w",
+      "filename": "1780340280245-p5291128.jpg",
+      "url": "/mock/uploads/1780340280245-p5291128.jpg",
+      "title": "Canada Pacific Railway Train",
+      "description": "",
+      "category": "landscapes",
+      "width": 3141,
+      "height": 2356,
+      "dateAdded": "2026-06-01T18:58:00.298Z",
+      "order": 3
+    },
+    {
+      "id": "b5wmh04c4",
+      "filename": "1780342512838-p5280909-2.jpg",
+      "url": "/mock/uploads/1780342512838-p5280909-2.jpg",
+      "title": "Morant's Curve",
+      "description": "",
+      "category": "landscapes",
+      "width": 2742,
+      "height": 3428,
+      "dateAdded": "2026-06-01T19:35:12.913Z",
+      "order": 4
+    },
+    {
+      "id": "qwb4tnzu4",
+      "filename": "1780343388527-dsc00637_5.jpg",
+      "url": "/mock/uploads/1780343388527-dsc00637_5.jpg",
+      "title": "Mugshot",
+      "description": "",
+      "category": "portraits",
+      "width": 1296,
+      "height": 1296,
+      "dateAdded": "2026-06-01T19:49:48.550Z",
+      "order": 5
+    }
+  ]
+}
