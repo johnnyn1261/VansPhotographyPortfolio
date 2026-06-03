@@ -2,10 +2,12 @@
 
 import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { 
   Upload, Trash2, LogOut, Image as ImageIcon, 
-  Settings, FolderPlus, GripVertical, Check, AlertCircle 
+  Settings, FolderPlus, GripVertical, Check, AlertCircle, Star
 } from "lucide-react";
+import exifr from "exifr";
 import { PortfolioMetadata, Photo, Category } from "@/lib/storage";
 
 interface AdminDashboardProps {
@@ -22,6 +24,7 @@ interface UploadQueueItem {
   order: number;
   status: "queued" | "uploading" | "done" | "error";
   progress: number;
+  blurDataURL?: string;
 
   // EXIF fields
   camera?: string;
@@ -33,9 +36,11 @@ interface UploadQueueItem {
 }
 
 export default function AdminDashboard({ initialMetadata }: AdminDashboardProps) {
+  const router = useRouter();
   const [metadata, setMetadata] = useState<PortfolioMetadata>(initialMetadata);
   const [activeTab, setActiveTab] = useState<"gallery" | "upload" | "albums">("gallery");
   const [galleryFilter, setGalleryFilter] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState<string>("");
   const [statusMessage, setStatusMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   // Drag and drop state
@@ -58,6 +63,7 @@ export default function AdminDashboard({ initialMetadata }: AdminDashboardProps)
   const [newCatName, setNewCatName] = useState("");
   const [newCatSlug, setNewCatSlug] = useState("");
   const [newCatDesc, setNewCatDesc] = useState("");
+  const [isSlugManuallyEdited, setIsSlugManuallyEdited] = useState(false);
 
   const showStatus = (type: "success" | "error", text: string) => {
     setStatusMessage({ type, text });
@@ -83,6 +89,10 @@ export default function AdminDashboard({ initialMetadata }: AdminDashboardProps)
       if (!res.ok) throw new Error("Failed to save changes");
       
       setMetadata(updatedMetadata);
+      window.dispatchEvent(new CustomEvent("portfolio-updated", { 
+        detail: { categories: updatedMetadata.categories } 
+      }));
+      router.refresh();
       showStatus("success", "Portfolio configurations updated successfully.");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to update configurations";
@@ -118,6 +128,7 @@ export default function AdminDashboard({ initialMetadata }: AdminDashboardProps)
     setNewCatName("");
     setNewCatSlug("");
     setNewCatDesc("");
+    setIsSlugManuallyEdited(false);
     savePortfolio(updated);
   };
 
@@ -175,7 +186,7 @@ export default function AdminDashboard({ initialMetadata }: AdminDashboardProps)
 
   // Drag and drop handlers
   const handleDragStart = (e: React.DragEvent, id: string) => {
-    if (activeCardId !== id) {
+    if (searchQuery.trim() !== "" || activeCardId !== id) {
       e.preventDefault();
       return;
     }
@@ -261,6 +272,105 @@ export default function AdminDashboard({ initialMetadata }: AdminDashboardProps)
     });
   };
 
+  const generateBlurPlaceholder = (file: File): Promise<string> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new window.Image();
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          canvas.width = 10;
+          canvas.height = 10;
+          const ctx = canvas.getContext("2d");
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, 10, 10);
+            resolve(canvas.toDataURL("image/jpeg", 0.6));
+          } else {
+            resolve("");
+          }
+        };
+        img.onerror = () => resolve("");
+        img.src = e.target?.result as string;
+      };
+      reader.onerror = () => resolve("");
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const parseExifClientSide = async (file: File) => {
+    try {
+      const tags = await exifr.parse(file, [
+        "Make", "Model", "FNumber", "ExposureTime", "ISO", "FocalLength", "DateTimeOriginal"
+      ]);
+      
+      if (!tags) return {};
+
+      // Camera model and make
+      let camera = "N/A";
+      if (tags.Make || tags.Model) {
+        const make = tags.Make ? String(tags.Make).trim() : "";
+        const model = tags.Model ? String(tags.Model).trim() : "";
+        
+        if (model.toLowerCase().startsWith(make.toLowerCase())) {
+          camera = model;
+        } else {
+          camera = `${make} ${model}`.trim();
+        }
+        
+        camera = camera
+          .replace(/OLYMPUS CORPORATION/i, "Olympus")
+          .replace(/NIKON CORPORATION/i, "Nikon")
+          .replace(/CANON INC\./i, "Canon")
+          .replace(/SONY CORPORATION/i, "Sony");
+      }
+
+      // Aperture formatting
+      const aperture = tags.FNumber ? `f/${tags.FNumber}` : "N/A";
+
+      // Shutter speed formatting
+      let shutterSpeed = "N/A";
+      if (tags.ExposureTime) {
+        const expTime = Number(tags.ExposureTime);
+        if (expTime >= 1) {
+          shutterSpeed = `${expTime}s`;
+        } else {
+          shutterSpeed = `1/${Math.round(1 / expTime)}s`;
+        }
+      }
+
+      const iso = tags.ISO ? Number(tags.ISO) : undefined;
+      const focalLength = tags.FocalLength ? `${tags.FocalLength}mm` : "N/A";
+      
+      let dateTaken: string | undefined = undefined;
+      if (tags.DateTimeOriginal) {
+        try {
+          dateTaken = new Date(tags.DateTimeOriginal).toISOString();
+        } catch (e) {
+          console.error("Invalid DateTimeOriginal value:", tags.DateTimeOriginal, e);
+        }
+      }
+
+      return {
+        camera,
+        aperture,
+        shutterSpeed,
+        iso,
+        focalLength,
+        dateTaken
+      };
+    } catch (err) {
+      console.error("Error parsing EXIF client side:", err);
+      return {
+        camera: "N/A",
+        aperture: "N/A",
+        shutterSpeed: "N/A",
+        iso: undefined,
+        focalLength: "N/A",
+        dateTaken: undefined
+      };
+    }
+  };
+
   // Queue files selected from file input
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
@@ -275,22 +385,19 @@ export default function AdminDashboard({ initialMetadata }: AdminDashboardProps)
         .replace(/[-_]/g, " ")
         .replace(/\b\w/g, c => c.toUpperCase());
 
-      // Slice the first 128KB to parse EXIF on server
+      // Parse EXIF on client side
       let exifData = {};
       try {
-        const slice = file.slice(0, 131072);
-        const exifRes = await fetch("/api/admin/exif", {
-          method: "POST",
-          body: slice
-        });
-        if (exifRes.ok) {
-          const resJson = await exifRes.json();
-          if (resJson.success && resJson.exif) {
-            exifData = resJson.exif;
-          }
-        }
+        exifData = await parseExifClientSide(file);
       } catch (err) {
-        console.error("Error fetching EXIF:", err);
+        console.error("Error parsing EXIF client side:", err);
+      }
+
+      let blurDataURL = "";
+      try {
+        blurDataURL = await generateBlurPlaceholder(file);
+      } catch (err) {
+        console.error("Error generating blur placeholder:", err);
       }
 
       newItems.push({
@@ -303,6 +410,7 @@ export default function AdminDashboard({ initialMetadata }: AdminDashboardProps)
         order: metadata.images.length + i,
         status: "queued",
         progress: 0,
+        blurDataURL,
         ...exifData
       });
     }
@@ -360,6 +468,7 @@ export default function AdminDashboard({ initialMetadata }: AdminDashboardProps)
         // AWS presigned URLs require the content type matches the signature
         if (process.env.STORAGE_MODE === "aws" || uploadUrl.startsWith("http")) {
           uploadHeaders["Content-Type"] = item.file.type;
+          uploadHeaders["Cache-Control"] = "public, max-age=31536000, immutable";
         }
 
         const putRes = await fetch(uploadUrl, {
@@ -384,6 +493,8 @@ export default function AdminDashboard({ initialMetadata }: AdminDashboardProps)
           height,
           dateAdded: new Date().toISOString(),
           order: item.order,
+          favorite: false,
+          blurDataURL: item.blurDataURL,
           camera: item.camera,
           aperture: item.aperture,
           shutterSpeed: item.shutterSpeed,
@@ -418,9 +529,20 @@ export default function AdminDashboard({ initialMetadata }: AdminDashboardProps)
   };
 
   const sortedPhotos = [...metadata.images].sort((a, b) => a.order - b.order);
-  const displayedPhotos = galleryFilter === "all"
+  const filteredByAlbum = galleryFilter === "all"
     ? sortedPhotos
     : sortedPhotos.filter(img => img.category === galleryFilter);
+  const displayedPhotos = searchQuery.trim() === ""
+    ? filteredByAlbum
+    : filteredByAlbum.filter(img => {
+        const query = searchQuery.toLowerCase();
+        return (
+          img.title.toLowerCase().includes(query) ||
+          (img.description && img.description.toLowerCase().includes(query)) ||
+          img.filename.toLowerCase().includes(query) ||
+          (img.camera && img.camera.toLowerCase().includes(query))
+        );
+      });
 
   return (
     <div className="w-full max-w-6xl mx-auto px-6 py-10 flex-grow flex flex-col gap-8 animate-fade-in">
@@ -428,7 +550,7 @@ export default function AdminDashboard({ initialMetadata }: AdminDashboardProps)
       <div className="flex items-center justify-between border-b border-line-light pb-6">
         <div>
           <h1 className="font-serif text-2xl italic font-semibold leading-tight">
-            Admin and Management
+            Admin Dashboard
           </h1>
           <p className="text-xs text-text-light mt-1">Signed in as administrator</p>
         </div>
@@ -479,7 +601,7 @@ export default function AdminDashboard({ initialMetadata }: AdminDashboardProps)
       </nav>
 
       {/* Main Workspace Area */}
-      <section className="flex-grow flex flex-col">
+      <section className="flex-grow flex flex-col -mt-2">
         {/* Status Toast Alert */}
         {statusMessage && (
           <div className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-50 p-4 text-xs font-semibold flex items-center gap-3 border shadow-2xl rounded-md animate-fade-in whitespace-nowrap ${
@@ -496,23 +618,36 @@ export default function AdminDashboard({ initialMetadata }: AdminDashboardProps)
         {activeTab === "gallery" && (
           <div className="flex flex-col gap-6">
             
-            {/* Album Filter Bar */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-line-light pb-4 mb-2 gap-4">
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold text-text-light tracking-widest uppercase">FILTER BY ALBUM:</span>
-                <select
-                  value={galleryFilter}
-                  onChange={(e) => setGalleryFilter(e.target.value)}
-                  className="border border-line-medium px-3 py-1.5 text-xs focus:outline-none focus:border-line-dark bg-bg-base text-text-main"
-                >
-                  <option value="all">All Albums ({metadata.images.length})</option>
-                  {metadata.categories.map(c => {
-                    const count = metadata.images.filter(img => img.category === c.slug).length;
-                    return (
-                      <option key={c.slug} value={c.slug}>{c.name} ({count})</option>
-                    );
-                  })}
-                </select>
+            {/* Album Filter & Search Bar */}
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between border-b border-line-light pb-4 mb-0 gap-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 w-full md:w-auto">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold text-text-light tracking-widest uppercase shrink-0">FILTER BY ALBUM:</span>
+                  <select
+                    value={galleryFilter}
+                    onChange={(e) => setGalleryFilter(e.target.value)}
+                    className="border border-line-medium px-3 py-1.5 text-xs focus:outline-none focus:border-line-dark bg-bg-base text-text-main"
+                  >
+                    <option value="all">All Albums ({metadata.images.length})</option>
+                    {metadata.categories.map(c => {
+                      const count = metadata.images.filter(img => img.category === c.slug).length;
+                      return (
+                        <option key={c.slug} value={c.slug}>{c.name} ({count})</option>
+                      );
+                    })}
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-2 w-full sm:w-80">
+                  <span className="text-[10px] font-bold text-text-light tracking-widest uppercase shrink-0">SEARCH:</span>
+                  <input
+                    type="text"
+                    placeholder="Search title, description, camera..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="border border-line-medium px-3 py-1.5 text-xs focus:outline-none focus:border-line-dark bg-bg-base text-text-main w-full"
+                  />
+                </div>
               </div>
             </div>
 
@@ -522,10 +657,10 @@ export default function AdminDashboard({ initialMetadata }: AdminDashboardProps)
               </div>
             ) : (
               <div className="flex flex-col gap-6">
-                {displayedPhotos.map((photo) => (
+                {displayedPhotos.map((photo, idx) => (
                   <div 
                     key={photo.id}
-                    draggable
+                    draggable={searchQuery.trim() === ""}
                     onDragStart={(e) => handleDragStart(e, photo.id)}
                     onDragOver={(e) => handleDragOver(e, photo.id)}
                     onDragEnd={handleDragEnd}
@@ -538,19 +673,28 @@ export default function AdminDashboard({ initialMetadata }: AdminDashboardProps)
                     }`}
                   >
                     {/* Full-height Left Drag Handle */}
-                    <div 
-                      className="drag-handle w-10 shrink-0 border-r border-line-light hover:border-line-medium bg-bg-base dark:bg-bg-alt/20 hover:bg-bg-alt dark:hover:bg-bg-alt/50 text-text-muted hover:text-text-main cursor-grab active:cursor-grabbing transition-colors duration-150 flex items-center justify-center"
-                      title="Drag card to reorder"
-                      onMouseDown={() => setActiveCardId(photo.id)}
-                      onMouseUp={() => setActiveCardId(null)}
-                      onMouseLeave={() => {
-                        if (!draggedId) {
-                          setActiveCardId(null);
-                        }
-                      }}
-                    >
-                      <GripVertical size={16} />
-                    </div>
+                    {searchQuery.trim() === "" ? (
+                      <div 
+                        className="drag-handle w-10 shrink-0 border-r border-line-light hover:border-line-medium bg-bg-base dark:bg-bg-alt/20 hover:bg-bg-alt dark:hover:bg-bg-alt/50 text-text-muted hover:text-text-main cursor-grab active:cursor-grabbing transition-colors duration-150 flex items-center justify-center"
+                        title="Drag card to reorder"
+                        onMouseDown={() => setActiveCardId(photo.id)}
+                        onMouseUp={() => setActiveCardId(null)}
+                        onMouseLeave={() => {
+                          if (!draggedId) {
+                            setActiveCardId(null);
+                          }
+                        }}
+                      >
+                        <GripVertical size={16} />
+                      </div>
+                    ) : (
+                      <div 
+                        className="w-10 shrink-0 border-r border-line-light bg-bg-alt/10 text-text-light/30 flex items-center justify-center cursor-not-allowed"
+                        title="Reordering is disabled when searching"
+                      >
+                        <GripVertical size={16} />
+                      </div>
+                    )}
 
                     {/* Main Card Content */}
                     <div className="flex-grow flex flex-col p-5 gap-5">
@@ -564,6 +708,7 @@ export default function AdminDashboard({ initialMetadata }: AdminDashboardProps)
                             fill
                             className="object-cover"
                             sizes="200px"
+                            priority={idx < 2}
                           />
                         </div>
 
@@ -608,10 +753,23 @@ export default function AdminDashboard({ initialMetadata }: AdminDashboardProps)
                         </div>
 
                         {/* Action Buttons - aligned on the right on large screens */}
-                        <div className="shrink-0 w-full lg:w-auto">
+                        <div className="shrink-0 w-full lg:w-auto flex flex-row lg:flex-col gap-2">
+                          <button
+                            onClick={() => handlePhotoUpdate(photo.id, { favorite: !photo.favorite })}
+                            className={`flex items-center justify-center gap-2 border px-4 py-2 text-xs font-semibold transition-colors w-full lg:w-auto cursor-pointer ${
+                              photo.favorite 
+                                ? "border-yellow-500 bg-yellow-50 dark:bg-yellow-950/10 text-yellow-600 dark:text-yellow-400 hover:bg-yellow-100 dark:hover:bg-yellow-950/20" 
+                                : "border-line-medium text-text-muted hover:text-text-main hover:bg-bg-alt"
+                            }`}
+                            title={photo.favorite ? "Unfavorite" : "Favorite"}
+                          >
+                            <Star size={14} className={photo.favorite ? "fill-yellow-500 text-yellow-500" : ""} />
+                            {photo.favorite ? "Favorited" : "Favorite"}
+                          </button>
+
                           <button
                             onClick={() => handleDeletePhoto(photo.id)}
-                            className="flex items-center justify-center gap-2 border border-red-200 text-red-600 dark:border-red-900/50 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 dark:hover:text-red-300 px-4 py-2 text-xs font-semibold transition-colors w-full lg:w-auto"
+                            className="flex items-center justify-center gap-2 border border-red-200 text-red-600 dark:border-red-900/50 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 dark:hover:text-red-300 px-4 py-2 text-xs font-semibold transition-colors w-full lg:w-auto cursor-pointer"
                             title="Delete photo"
                           >
                             <Trash2 size={14} />
@@ -774,9 +932,13 @@ export default function AdminDashboard({ initialMetadata }: AdminDashboardProps)
                       placeholder="e.g. Travel & Wildlife"
                       value={newCatName}
                       onChange={(e) => {
-                        setNewCatName(e.target.value);
-                        if (!newCatSlug) {
-                          setNewCatSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]/g, "-"));
+                        const newName = e.target.value;
+                        setNewCatName(newName);
+                        if (!newName) {
+                          setNewCatSlug("");
+                          setIsSlugManuallyEdited(false);
+                        } else if (!isSlugManuallyEdited) {
+                          setNewCatSlug(newName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""));
                         }
                       }}
                       className="border border-line-medium px-2.5 py-1.5 text-xs focus:outline-none focus:border-line-dark bg-bg-base text-text-main"
@@ -790,7 +952,16 @@ export default function AdminDashboard({ initialMetadata }: AdminDashboardProps)
                       type="text"
                       placeholder="e.g. travel-wildlife"
                       value={newCatSlug}
-                      onChange={(e) => setNewCatSlug(e.target.value)}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setNewCatSlug(val);
+                        if (val === "") {
+                          setIsSlugManuallyEdited(false);
+                          setNewCatSlug(newCatName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""));
+                        } else {
+                          setIsSlugManuallyEdited(true);
+                        }
+                      }}
                       className="border border-line-medium px-2.5 py-1.5 text-xs focus:outline-none focus:border-line-dark bg-bg-base text-text-main"
                       required
                     />

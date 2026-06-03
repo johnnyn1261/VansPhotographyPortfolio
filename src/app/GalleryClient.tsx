@@ -34,7 +34,7 @@ export default function GalleryClient({ metadata, activeCategory }: GalleryClien
   const sortedImages = [...metadata.images].sort((a, b) => a.order - b.order);
 
   const filteredImages = activeCategory === "all"
-    ? sortedImages
+    ? sortedImages.filter(img => img.favorite === true)
     : sortedImages.filter(img => img.category === activeCategory);
 
   useEffect(() => {
@@ -90,6 +90,8 @@ export default function GalleryClient({ metadata, activeCategory }: GalleryClien
                     className="w-full h-auto object-cover transform duration-700 ease-out group-hover:scale-105"
                     sizes="(max-width: 640px) 100vw, 50vw"
                     priority={index < 3}
+                    placeholder={image.blurDataURL ? "blur" : undefined}
+                    blurDataURL={image.blurDataURL}
                   />
                 </div>
               </div>
@@ -150,11 +152,12 @@ export default function GalleryClient({ metadata, activeCategory }: GalleryClien
 
               <div className="w-full h-full flex items-center justify-center relative">
                 <Image
+                  key={activePhoto.id}
                   src={activePhoto.url}
                   alt={activePhoto.title}
                   width={activePhoto.width || 1200}
                   height={activePhoto.height || 900}
-                  className="max-w-full max-h-full w-auto h-auto object-contain block shadow-xl border border-line-light bg-bg-base"
+                  className="max-w-full max-h-full w-auto h-auto object-contain block shadow-xl border border-line-light bg-bg-base animate-slide-up"
                   priority
                 />
               </div>

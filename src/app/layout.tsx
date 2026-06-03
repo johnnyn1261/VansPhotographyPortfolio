@@ -62,9 +62,9 @@ export default async function RootLayout({
           }}
         />
       </head>
-      <body className="min-h-full flex flex-col xs:flex-row bg-bg-base text-text-main font-sans selection:bg-text-main selection:text-bg-base">
+      <body className="min-h-full flex flex-col sm:flex-row bg-bg-base text-text-main font-sans selection:bg-text-main selection:text-bg-base">
         <Suspense fallback={
-          <div className="w-full xs:w-44 shrink-0 p-6 xs:px-6 xs:py-10 text-[10px] tracking-widest font-bold text-text-light uppercase">
+          <div className="w-full sm:w-44 shrink-0 p-6 sm:px-6 sm:py-10 text-[10px] tracking-widest font-bold text-text-light uppercase">
             LOADING...
           </div>
         }>

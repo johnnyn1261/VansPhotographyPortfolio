@@ -20,6 +20,8 @@ export interface Photo {
   height: number;
   dateAdded: string;
   order: number;
+  favorite?: boolean;
+  blurDataURL?: string;
   
   // EXIF Metadata tags
   camera?: string;
@@ -70,8 +72,17 @@ const getLocalPaths = () => {
   return { jsonPath, uploadsDir };
 };
 
+const globalForCache = globalThis as unknown as {
+  cachedMetadata: PortfolioMetadata | null;
+};
+
 export async function getPortfolioMetadata(): Promise<PortfolioMetadata> {
+  if (globalForCache.cachedMetadata) {
+    return globalForCache.cachedMetadata;
+  }
+
   const mode = process.env.STORAGE_MODE || "local";
+  let metadata: PortfolioMetadata;
 
   if (mode === "aws") {
     try {
@@ -82,32 +93,40 @@ export async function getPortfolioMetadata(): Promise<PortfolioMetadata> {
       });
       const response = await s3.send(command);
       const dataStr = await response.Body?.transformToString();
-      if (!dataStr) return defaultMetadata;
-      return JSON.parse(dataStr) as PortfolioMetadata;
+      if (!dataStr) {
+        metadata = defaultMetadata;
+      } else {
+        metadata = JSON.parse(dataStr) as PortfolioMetadata;
+      }
     } catch (err) {
       const error = err as { name?: string; code?: string };
       if (error.name === "NoSuchKey" || error.code === "NoSuchKey") {
         // Automatically seed with defaultMetadata
         await savePortfolioMetadata(defaultMetadata);
-        return defaultMetadata;
+        metadata = defaultMetadata;
+      } else {
+        console.error("AWS S3 fetching error. Falling back to default data:", err);
+        metadata = defaultMetadata;
       }
-      console.error("AWS S3 fetching error. Falling back to default data:", err);
-      return defaultMetadata;
     }
   } else {
     const { jsonPath } = getLocalPaths();
     if (!fs.existsSync(jsonPath)) {
       await savePortfolioMetadata(defaultMetadata);
-      return defaultMetadata;
-    }
-    try {
-      const fileData = await fs.promises.readFile(jsonPath, "utf-8");
-      return JSON.parse(fileData) as PortfolioMetadata;
-    } catch (err) {
-      console.error("Local mock loading error:", err);
-      return defaultMetadata;
+      metadata = defaultMetadata;
+    } else {
+      try {
+        const fileData = await fs.promises.readFile(jsonPath, "utf-8");
+        metadata = JSON.parse(fileData) as PortfolioMetadata;
+      } catch (err) {
+        console.error("Local mock loading error:", err);
+        metadata = defaultMetadata;
+      }
     }
   }
+
+  globalForCache.cachedMetadata = metadata;
+  return metadata;
 }
 
 export async function savePortfolioMetadata(metadata: PortfolioMetadata): Promise<void> {
@@ -127,6 +146,8 @@ export async function savePortfolioMetadata(metadata: PortfolioMetadata): Promis
     const { jsonPath } = getLocalPaths();
     await fs.promises.writeFile(jsonPath, JSON.stringify(metadata, null, 2), "utf-8");
   }
+
+  globalForCache.cachedMetadata = metadata;
 }
 
 export interface UploadUrlResponse {
@@ -151,7 +172,8 @@ export async function getUploadUrl(filename: string, fileType: string): Promise<
     const command = new PutObjectCommand({
       Bucket: bucketName,
       Key: key,
-      ContentType: fileType
+      ContentType: fileType,
+      CacheControl: "public, max-age=31536000, immutable"
     });
 
     // Generate signed URL valid for 15 minutes (900 seconds)

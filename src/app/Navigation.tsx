@@ -15,6 +15,26 @@ export default function Navigation({ categories }: NavigationProps) {
   const pathname = usePathname() || "/";
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [navCategories, setNavCategories] = useState<Category[]>(categories);
+
+  const [prevCategories, setPrevCategories] = useState<Category[]>(categories);
+  if (categories !== prevCategories) {
+    setPrevCategories(categories);
+    setNavCategories(categories);
+  }
+
+  useEffect(() => {
+    const handlePortfolioUpdate = (e: Event) => {
+      const customEvent = e as CustomEvent<{ categories: Category[] }>;
+      if (customEvent.detail && customEvent.detail.categories) {
+        setNavCategories(customEvent.detail.categories);
+      }
+    };
+    window.addEventListener("portfolio-updated", handlePortfolioUpdate);
+    return () => {
+      window.removeEventListener("portfolio-updated", handlePortfolioUpdate);
+    };
+  }, []);
 
   useEffect(() => {
     const isDark = document.documentElement.classList.contains("dark");
@@ -45,7 +65,7 @@ export default function Navigation({ categories }: NavigationProps) {
 
   useEffect(() => {
     const handleResize = () => {
-      if (window.innerWidth >= 480) setIsDrawerOpen(false);
+      if (window.innerWidth >= 640) setIsDrawerOpen(false);
     };
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
@@ -64,7 +84,7 @@ export default function Navigation({ categories }: NavigationProps) {
         HOME
         {pathname === "/" && activeAlbum === "all" && <span className="absolute bottom-0 left-1/2 -translate-x-1/2 h-0.5 bg-text-main animate-expand-underline" />}
       </Link>
-      {categories.map((cat) => (
+      {navCategories.map((cat) => (
         <Link
           key={cat.slug}
           href={`/?album=${cat.slug}`}
@@ -208,7 +228,7 @@ export default function Navigation({ categories }: NavigationProps) {
   return (
     <>
       {/* Desktop Sidebar Navigation */}
-      <aside className="hidden xs:flex w-44 shrink-0 border-r border-line-light bg-bg-base h-screen sticky top-0 flex-col px-6 py-8 z-30">
+      <aside className="hidden sm:flex w-44 shrink-0 bg-bg-base h-screen sticky top-0 flex-col px-6 py-8 z-30">
         <div className="shrink-0 mb-8">
           <Link href="/" className="group block select-none">
             <span className="font-serif text-lg font-bold tracking-widest block leading-tight text-text-main font-serif">VAN-NHAN</span>
@@ -227,7 +247,7 @@ export default function Navigation({ categories }: NavigationProps) {
       </aside>
 
       {/* Mobile Top Header */}
-      <header className="xs:hidden flex h-16 w-full items-center justify-between px-6 border-b border-line-light bg-bg-base/90 backdrop-blur-md sticky top-0 z-40">
+      <header className="sm:hidden flex h-16 w-full items-center justify-between px-6 border-b border-line-light bg-bg-base/90 backdrop-blur-md sticky top-0 z-40">
           <Link href="/" className="group block select-none">
             <span className="font-serif text-lg font-bold tracking-widest block leading-tight text-text-main font-serif">VAN-NHAN</span>
             <span className="font-serif text-lg font-bold tracking-widest block leading-tight text-text-main font-serif">NGUYEN</span>
@@ -254,7 +274,7 @@ export default function Navigation({ categories }: NavigationProps) {
       </header>
 
       {/* Mobile Side Drawer overlay */}
-      <div className={`xs:hidden fixed inset-0 z-50 transition-visibility duration-300 ${isDrawerOpen ? "visible" : "invisible"}`}>
+      <div className={`sm:hidden fixed inset-0 z-50 transition-visibility duration-300 ${isDrawerOpen ? "visible" : "invisible"}`}>
         <div
           onClick={() => setIsDrawerOpen(false)}
           className={`absolute inset-0 bg-black/15 backdrop-blur-[2px] transition-opacity duration-300 ${isDrawerOpen ? "opacity-100" : "opacity-0"}`}
