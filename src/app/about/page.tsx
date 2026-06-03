@@ -25,7 +25,7 @@ export default function AboutPage() {
           />
         </div>
         <p className="mb-4">
-          picked up photography in 2019 with his sister's old Olympus PEN E-PL6 after wanting a more tactial and
+          picked up photography in 2019 with his sister&apos;s old Olympus PEN E-PL6 after wanting a more tactial and
           true-to-life picture taking experience. Since then, Van has been photographing everything he can from landscape and portrait to event and toy photography. He has also stuck with the relatively niche Micro Four Thirds mount, eventually graduating to a Olympus OM-D E-M1 Mark II with several prime and zoom lenses.
         </p>
         <p>
@@ -99,7 +99,7 @@ export default function AboutPage() {
               </li>
               <li className="flex items-baseline gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-text-light shrink-0 self-center" />
-                <span>K&F Concept 75" Camera Tripod</span>
+                <span>K&F Concept 75&quot; Camera Tripod</span>
               </li>
               <li className="flex items-baseline gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-text-light shrink-0 self-center" />

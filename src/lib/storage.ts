@@ -46,14 +46,18 @@ const defaultMetadata: PortfolioMetadata = {
   images: []
 };
 
+let s3ClientInstance: S3Client | null = null;
 const getS3Client = (): S3Client => {
-  return new S3Client({
-    region: process.env.AWS_REGION || "us-east-1",
-    credentials: {
-      accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
-      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || ""
-    }
-  });
+  if (!s3ClientInstance) {
+    s3ClientInstance = new S3Client({
+      region: process.env.AWS_REGION || "us-east-1",
+      credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || ""
+      }
+    });
+  }
+  return s3ClientInstance;
 };
 
 const getLocalPaths = () => {

@@ -88,7 +88,7 @@ export default function GalleryClient({ metadata, activeCategory }: GalleryClien
                     width={image.width || 800}
                     height={image.height || 600}
                     className="w-full h-auto object-cover transform duration-700 ease-out group-hover:scale-105"
-                    sizes="(max-width: 640px) 100vw, 50vw"
+                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                     priority={index < 3}
                     placeholder={image.blurDataURL ? "blur" : undefined}
                     blurDataURL={image.blurDataURL}
