@@ -19,6 +19,14 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "images.unsplash.com", // Authorized for default seeded mock images
       },
+      {
+        protocol: "https",
+        hostname: "vnguyen.me",
+      },
+      {
+        protocol: "https",
+        hostname: "*.vnguyen.me",
+      },
     ],
   },
 };

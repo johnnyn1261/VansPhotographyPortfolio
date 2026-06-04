@@ -12,7 +12,7 @@ variable "bucket_name" {
 variable "allowed_origins" {
   type        = list(string)
   description = "A list of allowed origins for S3 CORS policy (e.g. your local dev server or custom domain)."
-  default     = ["http://localhost:3000"]
+  default     = ["http://localhost:3000", "https://vnguyen.me", "https://*.vnguyen.me"]
 }
 
 variable "environment" {
