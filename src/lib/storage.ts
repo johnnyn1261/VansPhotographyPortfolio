@@ -3,10 +3,17 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import fs from "fs";
 import path from "path";
 
+export interface Folder {
+  slug: string;
+  name: string;
+  description?: string;
+}
+
 export interface Category {
   slug: string;
   name: string;
   description?: string;
+  folderSlug?: string;
 }
 
 export interface Photo {
@@ -33,11 +40,13 @@ export interface Photo {
 }
 
 export interface PortfolioMetadata {
+  folders?: Folder[];
   categories: Category[];
   images: Photo[];
 }
 
 const defaultMetadata: PortfolioMetadata = {
+  folders: [],
   categories: [
     { slug: "landscapes", name: "Landscapes", description: "Scenic beauty, mountains, seascapes, and natural wonders." },
     { slug: "portraits", name: "Portraits", description: "Human stories, expressions, studio work, and editorial." },
@@ -76,15 +85,7 @@ const getLocalPaths = () => {
   return { jsonPath, uploadsDir };
 };
 
-const globalForCache = globalThis as unknown as {
-  cachedMetadata: PortfolioMetadata | null;
-};
-
 export async function getPortfolioMetadata(): Promise<PortfolioMetadata> {
-  if (globalForCache.cachedMetadata) {
-    return globalForCache.cachedMetadata;
-  }
-
   const mode = process.env.STORAGE_MODE || "local";
   let metadata: PortfolioMetadata;
 
@@ -101,6 +102,9 @@ export async function getPortfolioMetadata(): Promise<PortfolioMetadata> {
         metadata = defaultMetadata;
       } else {
         metadata = JSON.parse(dataStr) as PortfolioMetadata;
+        if (!metadata.folders) {
+          metadata.folders = [];
+        }
       }
     } catch (err) {
       const error = err as { name?: string; code?: string };
@@ -122,6 +126,9 @@ export async function getPortfolioMetadata(): Promise<PortfolioMetadata> {
       try {
         const fileData = await fs.promises.readFile(jsonPath, "utf-8");
         metadata = JSON.parse(fileData) as PortfolioMetadata;
+        if (!metadata.folders) {
+          metadata.folders = [];
+        }
       } catch (err) {
         console.error("Local mock loading error:", err);
         metadata = defaultMetadata;
@@ -129,7 +136,6 @@ export async function getPortfolioMetadata(): Promise<PortfolioMetadata> {
     }
   }
 
-  globalForCache.cachedMetadata = metadata;
   return metadata;
 }
 
@@ -150,8 +156,6 @@ export async function savePortfolioMetadata(metadata: PortfolioMetadata): Promis
     const { jsonPath } = getLocalPaths();
     await fs.promises.writeFile(jsonPath, JSON.stringify(metadata, null, 2), "utf-8");
   }
-
-  globalForCache.cachedMetadata = metadata;
 }
 
 export interface UploadUrlResponse {

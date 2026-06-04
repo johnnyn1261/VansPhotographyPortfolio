@@ -8,7 +8,7 @@ import {
   Settings, FolderPlus, GripVertical, Check, AlertCircle, Star
 } from "lucide-react";
 import exifr from "exifr";
-import { PortfolioMetadata, Photo, Category } from "@/lib/storage";
+import { PortfolioMetadata, Photo, Category, Folder } from "@/lib/storage";
 
 interface AdminDashboardProps {
   initialMetadata: PortfolioMetadata;
@@ -38,6 +38,17 @@ interface UploadQueueItem {
 export default function AdminDashboard({ initialMetadata }: AdminDashboardProps) {
   const router = useRouter();
   const [metadata, setMetadata] = useState<PortfolioMetadata>(initialMetadata);
+  const [savedMetadata, setSavedMetadata] = useState<PortfolioMetadata>(initialMetadata);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+  const [prevInitialMetadata, setPrevInitialMetadata] = useState(initialMetadata);
+  if (initialMetadata !== prevInitialMetadata) {
+    setPrevInitialMetadata(initialMetadata);
+    setMetadata(initialMetadata);
+    setSavedMetadata(initialMetadata);
+    setHasUnsavedChanges(false);
+  }
+
   const [activeTab, setActiveTab] = useState<"gallery" | "upload" | "albums">("gallery");
   const [galleryFilter, setGalleryFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -63,7 +74,14 @@ export default function AdminDashboard({ initialMetadata }: AdminDashboardProps)
   const [newCatName, setNewCatName] = useState("");
   const [newCatSlug, setNewCatSlug] = useState("");
   const [newCatDesc, setNewCatDesc] = useState("");
+  const [newCatFolder, setNewCatFolder] = useState("");
   const [isSlugManuallyEdited, setIsSlugManuallyEdited] = useState(false);
+
+  // New Folder State
+  const [newFolderName, setNewFolderName] = useState("");
+  const [newFolderSlug, setNewFolderSlug] = useState("");
+  const [newFolderDesc, setNewFolderDesc] = useState("");
+  const [isFolderSlugManuallyEdited, setIsFolderSlugManuallyEdited] = useState(false);
 
   const showStatus = (type: "success" | "error", text: string) => {
     setStatusMessage({ type, text });
@@ -89,8 +107,13 @@ export default function AdminDashboard({ initialMetadata }: AdminDashboardProps)
       if (!res.ok) throw new Error("Failed to save changes");
       
       setMetadata(updatedMetadata);
+      setSavedMetadata(updatedMetadata);
+      setHasUnsavedChanges(false);
       window.dispatchEvent(new CustomEvent("portfolio-updated", { 
-        detail: { categories: updatedMetadata.categories } 
+        detail: { 
+          categories: updatedMetadata.categories,
+          folders: updatedMetadata.folders || []
+        } 
       }));
       router.refresh();
       showStatus("success", "Portfolio configurations updated successfully.");
@@ -100,7 +123,72 @@ export default function AdminDashboard({ initialMetadata }: AdminDashboardProps)
     }
   };
 
+  const handleApplyChanges = async () => {
+    await savePortfolio(metadata);
+  };
 
+  const handleRevertChanges = () => {
+    setMetadata(savedMetadata);
+    setHasUnsavedChanges(false);
+  };
+
+  // Add Folder Handler
+  const handleAddFolder = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newFolderName || !newFolderSlug) return;
+
+    const slug = newFolderSlug.toLowerCase().replace(/[^a-z0-9-]/g, "-");
+    const existingFolders = metadata.folders || [];
+
+    if (existingFolders.some(f => f.slug === slug)) {
+      showStatus("error", `Folder slug "${slug}" already exists`);
+      return;
+    }
+
+    const newFolder: Folder = {
+      slug,
+      name: newFolderName,
+      description: newFolderDesc
+    };
+
+    const updated = {
+      ...metadata,
+      folders: [...existingFolders, newFolder]
+    };
+
+    setNewFolderName("");
+    setNewFolderSlug("");
+    setNewFolderDesc("");
+    setIsFolderSlugManuallyEdited(false);
+    savePortfolio(updated);
+  };
+
+  // Delete Folder Handler
+  const handleDeleteFolder = (slug: string) => {
+    if (!confirm("Are you sure you want to delete this folder? Nested albums will become top-level.")) return;
+
+    const existingFolders = metadata.folders || [];
+    const updated = {
+      ...metadata,
+      folders: existingFolders.filter(f => f.slug !== slug),
+      categories: metadata.categories.map(cat => 
+        cat.folderSlug === slug ? { ...cat, folderSlug: undefined } : cat
+      )
+    };
+    savePortfolio(updated);
+  };
+
+  // Update Album Folder Assignment
+  const handleUpdateAlbumFolder = (catSlug: string, folderSlug: string) => {
+    const updatedCategories = metadata.categories.map(cat => 
+      cat.slug === catSlug ? { ...cat, folderSlug: folderSlug || undefined } : cat
+    );
+    const updated = {
+      ...metadata,
+      categories: updatedCategories
+    };
+    savePortfolio(updated);
+  };
 
   // Add Category Handler
   const handleAddCategory = (e: React.FormEvent) => {
@@ -117,7 +205,8 @@ export default function AdminDashboard({ initialMetadata }: AdminDashboardProps)
     const newCat: Category = {
       slug,
       name: newCatName,
-      description: newCatDesc
+      description: newCatDesc,
+      folderSlug: newCatFolder || undefined
     };
 
     const updated = {
@@ -128,6 +217,7 @@ export default function AdminDashboard({ initialMetadata }: AdminDashboardProps)
     setNewCatName("");
     setNewCatSlug("");
     setNewCatDesc("");
+    setNewCatFolder("");
     setIsSlugManuallyEdited(false);
     savePortfolio(updated);
   };
@@ -150,11 +240,23 @@ export default function AdminDashboard({ initialMetadata }: AdminDashboardProps)
 
   // Edit Single Photo Info in Gallery List
   const handlePhotoUpdate = (photoId: string, fields: Partial<Photo>) => {
-    const updatedImages = metadata.images.map(img => 
-      img.id === photoId ? { ...img, ...fields } : img
-    );
-    const updated = { ...metadata, images: updatedImages };
-    savePortfolio(updated);
+    const isUnsavedField = 'title' in fields || 'category' in fields || 'description' in fields;
+
+    if (isUnsavedField) {
+      setMetadata(prev => ({
+        ...prev,
+        images: prev.images.map(img => 
+          img.id === photoId ? { ...img, ...fields } : img
+        )
+      }));
+      setHasUnsavedChanges(true);
+    } else {
+      const updatedImages = metadata.images.map(img => 
+        img.id === photoId ? { ...img, ...fields } : img
+      );
+      const updated = { ...metadata, images: updatedImages };
+      savePortfolio(updated);
+    }
   };
 
   // Delete Photo Handler
@@ -617,6 +719,30 @@ export default function AdminDashboard({ initialMetadata }: AdminDashboardProps)
         {/* TAB 1: Gallery Image Management */}
         {activeTab === "gallery" && (
           <div className="flex flex-col gap-6">
+            {hasUnsavedChanges && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50 rounded-sm animate-fade-in shadow-sm">
+                <div className="flex items-center gap-3">
+                  <AlertCircle className="text-amber-600 dark:text-amber-400 shrink-0" size={18} />
+                  <p className="text-xs font-medium text-amber-800 dark:text-amber-300">
+                    You have unsaved changes to your image details (Title, Album Collection, or Description).
+                  </p>
+                </div>
+                <div className="flex items-center gap-3 shrink-0 w-full sm:w-auto justify-end">
+                  <button
+                    onClick={handleRevertChanges}
+                    className="px-4 py-2 border border-amber-300 text-amber-700 hover:bg-amber-100/50 dark:border-amber-800 dark:text-amber-300 dark:hover:bg-amber-950/50 text-xs font-semibold tracking-wider transition-colors rounded-sm uppercase cursor-pointer"
+                  >
+                    Revert Changes
+                  </button>
+                  <button
+                    onClick={handleApplyChanges}
+                    className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white dark:bg-amber-700 dark:hover:bg-amber-600 text-xs font-semibold tracking-wider transition-all hover:shadow-md rounded-sm uppercase cursor-pointer"
+                  >
+                    Apply Changes
+                  </button>
+                </div>
+              </div>
+            )}
             
             {/* Album Filter & Search Bar */}
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between border-b border-line-light pb-4 mb-0 gap-4">
@@ -914,9 +1040,140 @@ export default function AdminDashboard({ initialMetadata }: AdminDashboardProps)
         {activeTab === "albums" && (
           <div className="flex flex-col gap-10">
 
+            {/* Folder Management Section */}
+            <div className="border-b border-line-light pb-10">
+              <span className="text-[11px] font-bold text-text-muted tracking-widest uppercase mb-4 block">
+                Manage Folders (1 Level Deep Groupings)
+              </span>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* Add Folder Form */}
+                <form onSubmit={handleAddFolder} className="border border-line-light p-6 bg-white dark:bg-bg-alt flex flex-col gap-4 lg:col-span-1">
+                  <span className="text-[10px] font-bold text-text-light tracking-widest border-b border-line-light pb-2 mb-2 block">
+                    CREATE NEW FOLDER
+                  </span>
+                  
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[9px] font-bold text-text-muted tracking-widest">FOLDER NAME</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Landscapes, Portraits"
+                      value={newFolderName}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setNewFolderName(val);
+                        if (!val) {
+                          setNewFolderSlug("");
+                          setIsFolderSlugManuallyEdited(false);
+                        } else if (!isFolderSlugManuallyEdited) {
+                          setNewFolderSlug(val.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""));
+                        }
+                      }}
+                      className="border border-line-medium px-2.5 py-1.5 text-xs focus:outline-none focus:border-line-dark bg-bg-base text-text-main"
+                      required
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[9px] font-bold text-text-muted tracking-widest">URL SLUG (ID)</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. landscapes"
+                      value={newFolderSlug}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setNewFolderSlug(val);
+                        if (val === "") {
+                          setIsFolderSlugManuallyEdited(false);
+                          setNewFolderSlug(newFolderName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""));
+                        } else {
+                          setIsFolderSlugManuallyEdited(true);
+                        }
+                      }}
+                      className="border border-line-medium px-2.5 py-1.5 text-xs focus:outline-none focus:border-line-dark bg-bg-base text-text-main"
+                      required
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[9px] font-bold text-text-muted tracking-widest">DESCRIPTION (OPTIONAL)</label>
+                    <textarea
+                      rows={2}
+                      placeholder="e.g. Collections containing scenic beauty"
+                      value={newFolderDesc}
+                      onChange={(e) => setNewFolderDesc(e.target.value)}
+                      className="border border-line-medium px-2.5 py-1.5 text-xs focus:outline-none focus:border-line-dark resize-y bg-bg-base text-text-main"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full mt-2 py-2 bg-text-main text-bg-base text-xs font-semibold tracking-widest hover:opacity-95 transition-opacity flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <FolderPlus size={14} />
+                    ADD NEW FOLDER
+                  </button>
+                </form>
+
+                {/* Existing Folders List */}
+                <div className="lg:col-span-2 flex flex-col gap-4">
+                  <span className="text-[10px] font-bold text-text-light tracking-widest border-b border-line-light pb-2 mb-2 block">
+                    EXISTING FOLDERS
+                  </span>
+
+                  {(metadata.folders || []).length === 0 ? (
+                    <div className="text-center py-10 border border-dashed border-line-medium bg-bg-alt text-text-light text-xs font-medium">
+                      No folders created yet. Create a folder to group your collections.
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-4">
+                      {(metadata.folders || []).map((folder) => {
+                        const nestedCount = metadata.categories.filter(c => c.folderSlug === folder.slug).length;
+                        return (
+                          <div 
+                            key={folder.slug}
+                            className="border border-line-light p-4 bg-white dark:bg-bg-alt flex items-center justify-between shadow-sm"
+                          >
+                            <div>
+                              <h4 className="font-serif text-sm font-semibold tracking-wide italic">
+                                {folder.name}
+                              </h4>
+                              <div className="flex flex-wrap gap-2 items-center mt-1">
+                                <code className="text-[9px] text-text-light uppercase font-bold tracking-wider mr-4">
+                                  SLUG: {folder.slug}
+                                </code>
+                                <span className="text-[10px] font-bold text-text-muted bg-bg-base px-2 py-0.5 border border-line-light uppercase tracking-wider rounded-sm">
+                                  {nestedCount} {nestedCount === 1 ? "collection" : "collections"}
+                                </span>
+                              </div>
+                              {folder.description && (
+                                <p className="text-[10px] text-text-muted mt-2 leading-relaxed max-w-md">
+                                  {folder.description}
+                                </p>
+                              )}
+                            </div>
+
+                            <button
+                              onClick={() => handleDeleteFolder(folder.slug)}
+                              className="p-2 border border-red-100 dark:border-red-900/30 hover:bg-red-50 dark:hover:bg-red-950/30 text-red-600 dark:text-red-400 transition-colors cursor-pointer"
+                              title="Delete Folder"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
             {/* Albums Collections Section */}
             <div>
-
+              <span className="text-[11px] font-bold text-text-muted tracking-widest uppercase mb-4 block">
+                Manage Album Collections (Photos belong here)
+              </span>
 
               {/* Add Album Form */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -968,6 +1225,20 @@ export default function AdminDashboard({ initialMetadata }: AdminDashboardProps)
                   </div>
 
                   <div className="flex flex-col gap-1.5">
+                    <label className="text-[9px] font-bold text-text-muted tracking-widest">PARENT FOLDER (OPTIONAL)</label>
+                    <select
+                      value={newCatFolder}
+                      onChange={(e) => setNewCatFolder(e.target.value)}
+                      className="border border-line-medium px-2.5 py-1.5 text-xs focus:outline-none focus:border-line-dark bg-bg-base text-text-main cursor-pointer"
+                    >
+                      <option value="">None (Top Level)</option>
+                      {(metadata.folders || []).map(f => (
+                        <option key={f.slug} value={f.slug}>{f.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
                     <label className="text-[9px] font-bold text-text-muted tracking-widest">DESCRIPTION (OPTIONAL)</label>
                     <textarea
                       rows={2}
@@ -980,7 +1251,7 @@ export default function AdminDashboard({ initialMetadata }: AdminDashboardProps)
 
                   <button
                     type="submit"
-                    className="w-full mt-2 py-2 bg-text-main text-bg-base text-xs font-semibold tracking-widest hover:opacity-95 transition-opacity flex items-center justify-center gap-2"
+                    className="w-full mt-2 py-2 bg-text-main text-bg-base text-xs font-semibold tracking-widest hover:opacity-95 transition-opacity flex items-center justify-center gap-2 cursor-pointer"
                   >
                     <FolderPlus size={14} />
                     ADD NEW ALBUM
@@ -1002,11 +1273,27 @@ export default function AdminDashboard({ initialMetadata }: AdminDashboardProps)
                         <h4 className="font-serif text-sm font-semibold tracking-wide italic">
                           {cat.name}
                         </h4>
-                        <code className="text-[9px] text-text-light uppercase font-bold tracking-wider">
-                          SLUG: {cat.slug}
-                        </code>
+                        <div className="flex flex-wrap gap-2 items-center mt-1">
+                          <code className="text-[9px] text-text-light uppercase font-bold tracking-wider">
+                            SLUG: {cat.slug}
+                          </code>
+                          <span className="text-[9px] text-text-light font-bold">•</span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[9px] font-bold text-text-light tracking-widest uppercase">Folder:</span>
+                            <select
+                              value={cat.folderSlug || ""}
+                              onChange={(e) => handleUpdateAlbumFolder(cat.slug, e.target.value)}
+                              className="border border-line-medium px-2 py-0.5 text-[10px] font-medium focus:outline-none focus:border-line-dark bg-bg-base text-text-main rounded-sm cursor-pointer"
+                            >
+                              <option value="">None (Top Level)</option>
+                              {(metadata.folders || []).map(f => (
+                                <option key={f.slug} value={f.slug}>{f.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
                         {cat.description && (
-                          <p className="text-[10px] text-text-muted mt-1 leading-relaxed max-w-md">
+                          <p className="text-[10px] text-text-muted mt-2 leading-relaxed max-w-md">
                             {cat.description}
                           </p>
                         )}
@@ -1014,7 +1301,7 @@ export default function AdminDashboard({ initialMetadata }: AdminDashboardProps)
 
                       <button
                         onClick={() => handleDeleteCategory(cat.slug)}
-                        className="p-2 border border-red-100 dark:border-red-900/30 hover:bg-red-50 dark:hover:bg-red-950/30 text-red-600 dark:text-red-400 transition-colors"
+                        className="p-2 border border-red-100 dark:border-red-900/30 hover:bg-red-50 dark:hover:bg-red-950/30 text-red-600 dark:text-red-400 transition-colors cursor-pointer"
                         title="Delete Album"
                       >
                         <Trash2 size={14} />

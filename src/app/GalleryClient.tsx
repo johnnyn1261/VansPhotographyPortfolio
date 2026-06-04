@@ -15,6 +15,7 @@ export default function GalleryClient({ metadata, activeCategory }: GalleryClien
   const [showMetadataPanel, setShowMetadataPanel] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
+  const [isLightboxImageLoading, setIsLightboxImageLoading] = useState(true);
 
   const [prevActiveCategory, setPrevActiveCategory] = useState(activeCategory);
   if (activeCategory !== prevActiveCategory) {
@@ -57,6 +58,37 @@ export default function GalleryClient({ metadata, activeCategory }: GalleryClien
   }, [selectedImageIndex, filteredImages, handleClose, isMaximized]);
 
   const activePhoto = selectedImageIndex !== null ? filteredImages[selectedImageIndex] : null;
+
+  useEffect(() => {
+    if (activePhoto?.id) {
+      setIsLightboxImageLoading(true);
+    }
+  }, [activePhoto?.id]);
+
+  useEffect(() => {
+    if (!showMetadataPanel) return;
+
+    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
+      const panel = document.getElementById("metadata-panel");
+      const infoBtn = document.getElementById("info-btn");
+
+      if (
+        panel &&
+        !panel.contains(event.target as Node) &&
+        infoBtn &&
+        !infoBtn.contains(event.target as Node)
+      ) {
+        setShowMetadataPanel(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("touchstart", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+    };
+  }, [showMetadataPanel]);
 
   const hasCameraSettings = activePhoto ? !!(
     (activePhoto.camera && activePhoto.camera !== "N/A") || 
@@ -114,6 +146,7 @@ export default function GalleryClient({ metadata, activeCategory }: GalleryClien
             <div className="relative h-10 px-4 flex items-center justify-end z-10 shrink-0">
               <div className="flex items-center gap-4">
                 <button
+                  id="info-btn"
                   onClick={() => setShowMetadataPanel(!showMetadataPanel)}
                   className={`p-1 rounded-full hover:bg-bg-alt/60 text-text-main cursor-pointer transition-colors ${showMetadataPanel ? "bg-bg-alt" : ""}`}
                   title="Toggle details panel"
@@ -159,11 +192,19 @@ export default function GalleryClient({ metadata, activeCategory }: GalleryClien
                   height={activePhoto.height || 900}
                   className="max-w-full max-h-full w-auto h-auto object-contain block shadow-xl border border-line-light bg-bg-base animate-slide-up"
                   priority
+                  unoptimized
+                  placeholder={activePhoto.blurDataURL ? "blur" : undefined}
+                  blurDataURL={activePhoto.blurDataURL}
+                  onLoad={() => setIsLightboxImageLoading(false)}
                 />
               </div>
 
               {showMetadataPanel && (
-                <div className="absolute bottom-6 md:bottom-10 left-1/2 -translate-x-1/2 w-80 md:w-96 max-w-[calc(100%-3rem)] flex flex-col justify-between border border-line-light/50 p-6 bg-white/80 dark:bg-black/80 backdrop-blur-md animate-fade-in shadow-xl h-fit max-h-[40vh] md:max-h-[50vh] overflow-y-auto z-20" onClick={(e) => e.stopPropagation()}>
+                <div
+                  id="metadata-panel"
+                  className="absolute bottom-6 md:bottom-10 left-1/2 -translate-x-1/2 w-80 md:w-96 max-w-[calc(100%-3rem)] flex flex-col justify-between border border-line-light/50 p-6 bg-white/80 dark:bg-black/80 backdrop-blur-md animate-fade-in shadow-xl h-fit max-h-[40vh] md:max-h-[50vh] overflow-y-auto z-20"
+                  onClick={(e) => e.stopPropagation()}
+                >
                   <div>
                     <div className="flex items-center justify-between border-b border-line-light pb-4 mb-4">
                       <span className="text-[10px] tracking-widest font-bold text-text-light uppercase">
@@ -243,6 +284,7 @@ export default function GalleryClient({ metadata, activeCategory }: GalleryClien
             className="max-w-full max-h-full w-auto h-auto object-contain block shadow-2xl"
             onClick={(e) => e.stopPropagation()}
             priority
+            unoptimized
           />
           <button
             onClick={() => setIsMaximized(false)}

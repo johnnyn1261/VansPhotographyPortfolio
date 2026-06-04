@@ -19,7 +19,7 @@ export async function POST(request: Request) {
     const metadata = await request.json();
     
     // Validate schema
-    if (!Array.isArray(metadata.categories) || !Array.isArray(metadata.images)) {
+    if (!Array.isArray(metadata.categories) || !Array.isArray(metadata.images) || (metadata.folders !== undefined && !Array.isArray(metadata.folders))) {
       return NextResponse.json({ error: "Invalid portfolio metadata payload" }, { status: 400 });
     }
 
