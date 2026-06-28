@@ -67,7 +67,7 @@ export default function AboutPage() {
             <ul className="flex flex-col gap-3 text-xs font-medium text-text-main">
               <li className="flex items-baseline gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-text-light shrink-0 self-center" />
-                <span>OM Systems 12-40mm f/2.8 PRO</span>
+                <span>OM Systems 12-40mm f/2.8 PRO II</span>
               </li>
               <li className="flex items-baseline gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-text-light shrink-0 self-center" />

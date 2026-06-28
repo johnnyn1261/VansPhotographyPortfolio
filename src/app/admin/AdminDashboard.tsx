@@ -5,7 +5,8 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { 
   Upload, Trash2, LogOut, Image as ImageIcon, 
-  Settings, FolderPlus, GripVertical, Check, AlertCircle, Star
+  Settings, FolderPlus, GripVertical, Check, AlertCircle, Star,
+  Pencil, X
 } from "lucide-react";
 import exifr from "exifr";
 import { PortfolioMetadata, Photo, Category, Folder } from "@/lib/storage";
@@ -82,6 +83,19 @@ export default function AdminDashboard({ initialMetadata }: AdminDashboardProps)
   const [newFolderSlug, setNewFolderSlug] = useState("");
   const [newFolderDesc, setNewFolderDesc] = useState("");
   const [isFolderSlugManuallyEdited, setIsFolderSlugManuallyEdited] = useState(false);
+
+  // Editing Folder State
+  const [editingFolderSlug, setEditingFolderSlug] = useState<string | null>(null);
+  const [editingFolderName, setEditingFolderName] = useState("");
+  const [editingFolderNewSlug, setEditingFolderNewSlug] = useState("");
+  const [editingFolderDesc, setEditingFolderDesc] = useState("");
+
+  // Editing Album State
+  const [editingAlbumSlug, setEditingAlbumSlug] = useState<string | null>(null);
+  const [editingAlbumName, setEditingAlbumName] = useState("");
+  const [editingAlbumNewSlug, setEditingAlbumNewSlug] = useState("");
+  const [editingAlbumDesc, setEditingAlbumDesc] = useState("");
+  const [editingAlbumFolder, setEditingAlbumFolder] = useState("");
 
   const showStatus = (type: "success" | "error", text: string) => {
     setStatusMessage({ type, text });
@@ -178,6 +192,55 @@ export default function AdminDashboard({ initialMetadata }: AdminDashboardProps)
     savePortfolio(updated);
   };
 
+  // Start Edit Folder
+  const handleStartEditFolder = (folder: Folder) => {
+    setEditingFolderSlug(folder.slug);
+    setEditingFolderName(folder.name);
+    setEditingFolderNewSlug(folder.slug);
+    setEditingFolderDesc(folder.description || "");
+  };
+
+  // Cancel Edit Folder
+  const handleCancelEditFolder = () => {
+    setEditingFolderSlug(null);
+    setEditingFolderName("");
+    setEditingFolderNewSlug("");
+    setEditingFolderDesc("");
+  };
+
+  // Save Edit Folder
+  const handleSaveEditFolder = (oldSlug: string) => {
+    if (!editingFolderName || !editingFolderNewSlug) return;
+
+    const newSlug = editingFolderNewSlug.toLowerCase().replace(/[^a-z0-9-]/g, "-");
+    const existingFolders = metadata.folders || [];
+
+    // Check if new slug already exists elsewhere
+    if (newSlug !== oldSlug && existingFolders.some(f => f.slug === newSlug)) {
+      showStatus("error", `Folder slug "${newSlug}" already exists`);
+      return;
+    }
+
+    const updatedFolders = existingFolders.map(f => 
+      f.slug === oldSlug 
+        ? { ...f, slug: newSlug, name: editingFolderName, description: editingFolderDesc }
+        : f
+    );
+
+    const updatedCategories = metadata.categories.map(cat => 
+      cat.folderSlug === oldSlug ? { ...cat, folderSlug: newSlug } : cat
+    );
+
+    const updated = {
+      ...metadata,
+      folders: updatedFolders,
+      categories: updatedCategories
+    };
+
+    savePortfolio(updated);
+    handleCancelEditFolder();
+  };
+
   // Update Album Folder Assignment
   const handleUpdateAlbumFolder = (catSlug: string, folderSlug: string) => {
     const updatedCategories = metadata.categories.map(cat => 
@@ -236,6 +299,62 @@ export default function AdminDashboard({ initialMetadata }: AdminDashboardProps)
       categories: metadata.categories.filter(c => c.slug !== slug)
     };
     savePortfolio(updated);
+  };
+
+  // Start Edit Album
+  const handleStartEditAlbum = (cat: Category) => {
+    setEditingAlbumSlug(cat.slug);
+    setEditingAlbumName(cat.name);
+    setEditingAlbumNewSlug(cat.slug);
+    setEditingAlbumDesc(cat.description || "");
+    setEditingAlbumFolder(cat.folderSlug || "");
+  };
+
+  // Cancel Edit Album
+  const handleCancelEditAlbum = () => {
+    setEditingAlbumSlug(null);
+    setEditingAlbumName("");
+    setEditingAlbumNewSlug("");
+    setEditingAlbumDesc("");
+    setEditingAlbumFolder("");
+  };
+
+  // Save Edit Album
+  const handleSaveEditAlbum = (oldSlug: string) => {
+    if (!editingAlbumName || !editingAlbumNewSlug) return;
+
+    const newSlug = editingAlbumNewSlug.toLowerCase().replace(/[^a-z0-9-]/g, "-");
+
+    // Check if new slug already exists elsewhere
+    if (newSlug !== oldSlug && metadata.categories.some(c => c.slug === newSlug)) {
+      showStatus("error", `Album slug "${newSlug}" already exists`);
+      return;
+    }
+
+    const updatedCategories = metadata.categories.map(cat => 
+      cat.slug === oldSlug 
+        ? { 
+            ...cat, 
+            slug: newSlug, 
+            name: editingAlbumName, 
+            description: editingAlbumDesc || undefined,
+            folderSlug: editingAlbumFolder || undefined 
+          }
+        : cat
+    );
+
+    const updatedImages = metadata.images.map(img => 
+      img.category === oldSlug ? { ...img, category: newSlug } : img
+    );
+
+    const updated = {
+      ...metadata,
+      categories: updatedCategories,
+      images: updatedImages
+    };
+
+    savePortfolio(updated);
+    handleCancelEditAlbum();
   };
 
   // Edit Single Photo Info in Gallery List
@@ -1129,10 +1248,86 @@ export default function AdminDashboard({ initialMetadata }: AdminDashboardProps)
                     <div className="flex flex-col gap-4">
                       {(metadata.folders || []).map((folder) => {
                         const nestedCount = metadata.categories.filter(c => c.folderSlug === folder.slug).length;
+                        if (editingFolderSlug === folder.slug) {
+                          return (
+                            <div 
+                              key={folder.slug}
+                              className="border border-line-dark p-5 bg-white dark:bg-bg-alt flex flex-col gap-4 shadow-md"
+                            >
+                              <span className="text-[9px] font-bold text-text-light tracking-widest border-b border-line-light pb-1 block">
+                                EDITING FOLDER: {folder.name}
+                              </span>
+                              
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="flex flex-col gap-1.5">
+                                  <label htmlFor="edit-folder-name" className="text-[9px] font-bold text-text-muted tracking-widest">FOLDER NAME</label>
+                                  <input
+                                    id="edit-folder-name"
+                                    type="text"
+                                    value={editingFolderName}
+                                    onChange={(e) => setEditingFolderName(e.target.value)}
+                                    className="border border-line-medium px-2.5 py-1.5 text-xs focus:outline-none focus:border-line-dark bg-bg-base text-text-main"
+                                    required
+                                  />
+                                </div>
+
+                                <div className="flex flex-col gap-1.5">
+                                  <label htmlFor="edit-folder-slug" className="text-[9px] font-bold text-text-muted tracking-widest">URL SLUG (ID)</label>
+                                  <input
+                                    id="edit-folder-slug"
+                                    type="text"
+                                    value={editingFolderNewSlug}
+                                    onChange={(e) => setEditingFolderNewSlug(e.target.value)}
+                                    className="border border-line-medium px-2.5 py-1.5 text-xs focus:outline-none focus:border-line-dark bg-bg-base text-text-main"
+                                    required
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="flex flex-col gap-1.5">
+                                <label htmlFor="edit-folder-desc" className="text-[9px] font-bold text-text-muted tracking-widest">DESCRIPTION</label>
+                                <textarea
+                                  id="edit-folder-desc"
+                                  rows={2}
+                                  value={editingFolderDesc}
+                                  onChange={(e) => setEditingFolderDesc(e.target.value)}
+                                  className="border border-line-medium px-2.5 py-1.5 text-xs focus:outline-none focus:border-line-dark resize-y bg-bg-base text-text-main"
+                                />
+                              </div>
+
+                              {editingFolderNewSlug !== folder.slug && (
+                                <p className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold flex items-center gap-1.5">
+                                  <AlertCircle size={12} className="shrink-0" />
+                                  Warning: Changing slug will update parent folder assignment for all nested albums.
+                                </p>
+                              )}
+
+                              <div className="flex gap-2 justify-end mt-2">
+                                <button
+                                  type="button"
+                                  onClick={handleCancelEditFolder}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 border border-line-medium text-text-muted hover:text-text-main hover:bg-bg-alt text-xs font-semibold tracking-wider transition-colors uppercase rounded-sm cursor-pointer"
+                                >
+                                  <X size={14} />
+                                  Cancel
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleSaveEditFolder(folder.slug)}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 bg-text-main text-bg-base text-xs font-semibold tracking-wider hover:opacity-95 transition-opacity uppercase rounded-sm cursor-pointer"
+                                >
+                                  <Check size={14} />
+                                  Save
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        }
+
                         return (
                           <div 
                             key={folder.slug}
-                            className="border border-line-light p-4 bg-white dark:bg-bg-alt flex items-center justify-between shadow-sm"
+                            className="border border-line-light p-4 bg-white dark:bg-bg-alt flex items-center justify-between shadow-sm animate-fade-in"
                           >
                             <div>
                               <h4 className="font-serif text-sm font-semibold tracking-wide italic">
@@ -1153,13 +1348,24 @@ export default function AdminDashboard({ initialMetadata }: AdminDashboardProps)
                               )}
                             </div>
 
-                            <button
-                              onClick={() => handleDeleteFolder(folder.slug)}
-                              className="p-2 border border-red-100 dark:border-red-900/30 hover:bg-red-50 dark:hover:bg-red-950/30 text-red-600 dark:text-red-400 transition-colors cursor-pointer"
-                              title="Delete Folder"
-                            >
-                              <Trash2 size={14} />
-                            </button>
+                            <div className="flex gap-2 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => handleStartEditFolder(folder)}
+                                className="p-2 border border-line-medium hover:border-line-dark hover:bg-bg-alt text-text-muted hover:text-text-main transition-colors cursor-pointer"
+                                title="Edit Folder"
+                              >
+                                <Pencil size={14} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteFolder(folder.slug)}
+                                className="p-2 border border-red-100 dark:border-red-900/30 hover:bg-red-50 dark:hover:bg-red-950/30 text-red-600 dark:text-red-400 transition-colors cursor-pointer"
+                                title="Delete Folder"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
                           </div>
                         );
                       })}
@@ -1264,50 +1470,154 @@ export default function AdminDashboard({ initialMetadata }: AdminDashboardProps)
                     EXISTING ALBUMS
                   </span>
                   
-                  {metadata.categories.map((cat) => (
-                    <div 
-                      key={cat.slug}
-                      className="border border-line-light p-4 bg-white dark:bg-bg-alt flex items-center justify-between shadow-sm"
-                    >
-                      <div>
-                        <h4 className="font-serif text-sm font-semibold tracking-wide italic">
-                          {cat.name}
-                        </h4>
-                        <div className="flex flex-wrap gap-2 items-center mt-1">
-                          <code className="text-[9px] text-text-light uppercase font-bold tracking-wider">
-                            SLUG: {cat.slug}
-                          </code>
-                          <span className="text-[9px] text-text-light font-bold">•</span>
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-[9px] font-bold text-text-light tracking-widest uppercase">Folder:</span>
-                            <select
-                              value={cat.folderSlug || ""}
-                              onChange={(e) => handleUpdateAlbumFolder(cat.slug, e.target.value)}
-                              className="border border-line-medium px-2 py-0.5 text-[10px] font-medium focus:outline-none focus:border-line-dark bg-bg-base text-text-main rounded-sm cursor-pointer"
+                  {metadata.categories.map((cat) => {
+                        if (editingAlbumSlug === cat.slug) {
+                          return (
+                            <div 
+                              key={cat.slug}
+                              className="border border-line-dark p-5 bg-white dark:bg-bg-alt flex flex-col gap-4 shadow-md"
                             >
-                              <option value="">None (Top Level)</option>
-                              {(metadata.folders || []).map(f => (
-                                <option key={f.slug} value={f.slug}>{f.name}</option>
-                              ))}
-                            </select>
-                          </div>
-                        </div>
-                        {cat.description && (
-                          <p className="text-[10px] text-text-muted mt-2 leading-relaxed max-w-md">
-                            {cat.description}
-                          </p>
-                        )}
-                      </div>
+                              <span className="text-[9px] font-bold text-text-light tracking-widest border-b border-line-light pb-1 block">
+                                EDITING ALBUM: {cat.name}
+                              </span>
+                              
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="flex flex-col gap-1.5">
+                                  <label htmlFor="edit-album-name" className="text-[9px] font-bold text-text-muted tracking-widest">ALBUM NAME</label>
+                                  <input
+                                    id="edit-album-name"
+                                    type="text"
+                                    value={editingAlbumName}
+                                    onChange={(e) => setEditingAlbumName(e.target.value)}
+                                    className="border border-line-medium px-2.5 py-1.5 text-xs focus:outline-none focus:border-line-dark bg-bg-base text-text-main"
+                                    required
+                                  />
+                                </div>
 
-                      <button
-                        onClick={() => handleDeleteCategory(cat.slug)}
-                        className="p-2 border border-red-100 dark:border-red-900/30 hover:bg-red-50 dark:hover:bg-red-950/30 text-red-600 dark:text-red-400 transition-colors cursor-pointer"
-                        title="Delete Album"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  ))}
+                                <div className="flex flex-col gap-1.5">
+                                  <label htmlFor="edit-album-slug" className="text-[9px] font-bold text-text-muted tracking-widest">URL SLUG (ID)</label>
+                                  <input
+                                    id="edit-album-slug"
+                                    type="text"
+                                    value={editingAlbumNewSlug}
+                                    onChange={(e) => setEditingAlbumNewSlug(e.target.value)}
+                                    className="border border-line-medium px-2.5 py-1.5 text-xs focus:outline-none focus:border-line-dark bg-bg-base text-text-main"
+                                    required
+                                  />
+                                </div>
+
+                                <div className="flex flex-col gap-1.5">
+                                  <label htmlFor="edit-album-folder" className="text-[9px] font-bold text-text-muted tracking-widest">PARENT FOLDER</label>
+                                  <select
+                                    id="edit-album-folder"
+                                    value={editingAlbumFolder}
+                                    onChange={(e) => setEditingAlbumFolder(e.target.value)}
+                                    className="border border-line-medium px-2.5 py-1.5 text-xs focus:outline-none focus:border-line-dark bg-bg-base text-text-main cursor-pointer"
+                                  >
+                                    <option value="">None (Top Level)</option>
+                                    {(metadata.folders || []).map(f => (
+                                      <option key={f.slug} value={f.slug}>{f.name}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                              </div>
+
+                              <div className="flex flex-col gap-1.5">
+                                <label htmlFor="edit-album-desc" className="text-[9px] font-bold text-text-muted tracking-widest">DESCRIPTION</label>
+                                <textarea
+                                  id="edit-album-desc"
+                                  rows={2}
+                                  value={editingAlbumDesc}
+                                  onChange={(e) => setEditingAlbumDesc(e.target.value)}
+                                  className="border border-line-medium px-2.5 py-1.5 text-xs focus:outline-none focus:border-line-dark resize-y bg-bg-base text-text-main"
+                                />
+                              </div>
+
+                              {editingAlbumNewSlug !== cat.slug && (
+                                <p className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold flex items-center gap-1.5">
+                                  <AlertCircle size={12} className="shrink-0" />
+                                  Warning: Changing slug will update album association for all containing photos.
+                                </p>
+                              )}
+
+                              <div className="flex gap-2 justify-end mt-2">
+                                <button
+                                  type="button"
+                                  onClick={handleCancelEditAlbum}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 border border-line-medium text-text-muted hover:text-text-main hover:bg-bg-alt text-xs font-semibold tracking-wider transition-colors uppercase rounded-sm cursor-pointer"
+                                >
+                                  <X size={14} />
+                                  Cancel
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleSaveEditAlbum(cat.slug)}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 bg-text-main text-bg-base text-xs font-semibold tracking-wider hover:opacity-95 transition-opacity uppercase rounded-sm cursor-pointer"
+                                >
+                                  <Check size={14} />
+                                  Save
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div 
+                            key={cat.slug}
+                            className="border border-line-light p-4 bg-white dark:bg-bg-alt flex items-center justify-between shadow-sm animate-fade-in"
+                          >
+                            <div>
+                              <h4 className="font-serif text-sm font-semibold tracking-wide italic">
+                                {cat.name}
+                              </h4>
+                              <div className="flex flex-wrap gap-2 items-center mt-1">
+                                <code className="text-[9px] text-text-light uppercase font-bold tracking-wider">
+                                  SLUG: {cat.slug}
+                                </code>
+                                <span className="text-[9px] text-text-light font-bold">•</span>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-[9px] font-bold text-text-light tracking-widest uppercase">Folder:</span>
+                                  <select
+                                    value={cat.folderSlug || ""}
+                                    onChange={(e) => handleUpdateAlbumFolder(cat.slug, e.target.value)}
+                                    className="border border-line-medium px-2 py-0.5 text-[10px] font-medium focus:outline-none focus:border-line-dark bg-bg-base text-text-main rounded-sm cursor-pointer"
+                                  >
+                                    <option value="">None (Top Level)</option>
+                                    {(metadata.folders || []).map(f => (
+                                      <option key={f.slug} value={f.slug}>{f.name}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                              </div>
+                              {cat.description && (
+                                <p className="text-[10px] text-text-muted mt-2 leading-relaxed max-w-md">
+                                  {cat.description}
+                                </p>
+                              )}
+                            </div>
+
+                            <div className="flex gap-2 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => handleStartEditAlbum(cat)}
+                                className="p-2 border border-line-medium hover:border-line-dark hover:bg-bg-alt text-text-muted hover:text-text-main transition-colors cursor-pointer"
+                                title="Edit Album"
+                              >
+                                <Pencil size={14} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteCategory(cat.slug)}
+                                className="p-2 border border-red-100 dark:border-red-900/30 hover:bg-red-50 dark:hover:bg-red-950/30 text-red-600 dark:text-red-400 transition-colors cursor-pointer"
+                                title="Delete Album"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                  })}
                 </div>
               </div>
             </div>

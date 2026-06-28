@@ -3,6 +3,7 @@ import { Playfair_Display, Plus_Jakarta_Sans } from "next/font/google";
 import { getPortfolioMetadata } from "@/lib/storage";
 import Navigation from "./Navigation";
 import { Suspense } from "react";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 
 const playfair = Playfair_Display({
@@ -77,6 +78,7 @@ export default async function RootLayout({
           <main className="flex-grow">
             {children}
           </main>
+          <Analytics />
         </div>
       </body>
     </html>

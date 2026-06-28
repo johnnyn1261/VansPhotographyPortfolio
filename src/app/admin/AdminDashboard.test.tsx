@@ -35,9 +35,11 @@ describe("AdminDashboard Deferred Save Tests", () => {
 
   beforeEach(() => {
     mockMetadata = {
-      folders: [],
+      folders: [
+        { slug: "travel", name: "Travel", description: "Around the world" }
+      ],
       categories: [
-        { slug: "city", name: "Cityscapes", description: "Urban views" }
+        { slug: "city", name: "Cityscapes", description: "Urban views", folderSlug: "travel" }
       ],
       images: [
         {
@@ -140,5 +142,88 @@ describe("AdminDashboard Deferred Save Tests", () => {
     // The payload should contain the updated title
     const payload = JSON.parse(fetchArgs[1].body);
     expect(payload.images[0].title).toBe("Berlin Final");
+  });
+
+  it("should edit a folder and cascade slug update to nested categories", async () => {
+    render(<AdminDashboard initialMetadata={mockMetadata} />);
+
+    // Switch to Manage Albums tab
+    const manageAlbumsTab = screen.getByRole("button", { name: /Manage Albums/i });
+    fireEvent.click(manageAlbumsTab);
+
+    // Click the Edit Folder button for Travel
+    const editFolderButton = screen.getByTitle("Edit Folder");
+    fireEvent.click(editFolderButton);
+
+    // Update the folder fields
+    const nameInput = document.getElementById("edit-folder-name") as HTMLInputElement;
+    const slugInput = document.getElementById("edit-folder-slug") as HTMLInputElement;
+    const descInput = document.getElementById("edit-folder-desc") as HTMLTextAreaElement;
+
+    fireEvent.change(nameInput, { target: { value: "Travel New" } });
+    fireEvent.change(slugInput, { target: { value: "travel-new" } });
+    fireEvent.change(descInput, { target: { value: "Around the world new" } });
+
+    // Click Save
+    const saveButton = screen.getByRole("button", { name: /Save/i });
+    fireEvent.click(saveButton);
+
+    // Fetch should be called to save with the cascading changes
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    const fetchArgs = mockFetch.mock.calls[0];
+    expect(fetchArgs[0]).toBe("/api/admin/portfolio");
+    expect(fetchArgs[1].method).toBe("POST");
+
+    const payload = JSON.parse(fetchArgs[1].body);
+    // Verify folder details are updated
+    expect(payload.folders[0]).toEqual({
+      slug: "travel-new",
+      name: "Travel New",
+      description: "Around the world new"
+    });
+    // Verify nested category's folderSlug is updated to travel-new
+    expect(payload.categories[0].folderSlug).toBe("travel-new");
+  });
+
+  it("should edit an album and cascade slug update to containing photos", async () => {
+    render(<AdminDashboard initialMetadata={mockMetadata} />);
+
+    // Switch to Manage Albums tab
+    const manageAlbumsTab = screen.getByRole("button", { name: /Manage Albums/i });
+    fireEvent.click(manageAlbumsTab);
+
+    // Click the Edit Album button for Cityscapes
+    const editAlbumButton = screen.getByTitle("Edit Album");
+    fireEvent.click(editAlbumButton);
+
+    // Update the album fields
+    const nameInput = document.getElementById("edit-album-name") as HTMLInputElement;
+    const slugInput = document.getElementById("edit-album-slug") as HTMLInputElement;
+    const descInput = document.getElementById("edit-album-desc") as HTMLTextAreaElement;
+
+    fireEvent.change(nameInput, { target: { value: "Cityscapes New" } });
+    fireEvent.change(slugInput, { target: { value: "city-new" } });
+    fireEvent.change(descInput, { target: { value: "Urban views new" } });
+
+    // Click Save
+    const saveButton = screen.getByRole("button", { name: /Save/i });
+    fireEvent.click(saveButton);
+
+    // Fetch should be called to save with the cascading changes
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    const fetchArgs = mockFetch.mock.calls[0];
+    expect(fetchArgs[0]).toBe("/api/admin/portfolio");
+    expect(fetchArgs[1].method).toBe("POST");
+
+    const payload = JSON.parse(fetchArgs[1].body);
+    // Verify category details are updated
+    expect(payload.categories[0]).toEqual({
+      slug: "city-new",
+      name: "Cityscapes New",
+      description: "Urban views new",
+      folderSlug: "travel"
+    });
+    // Verify photo category is updated to city-new
+    expect(payload.images[0].category).toBe("city-new");
   });
 });

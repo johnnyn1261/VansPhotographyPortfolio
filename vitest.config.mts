@@ -5,5 +5,9 @@ export default defineConfig({
   plugins: [tsconfigPaths()],
   test: {
     environment: "node",
+    coverage: {
+      provider: "v8",
+      include: ["src/lib/storage.ts"],
+    }
   },
 });
