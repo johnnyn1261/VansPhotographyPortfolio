@@ -26,7 +26,7 @@ export default function AboutPage() {
         </div>
         <p className="mb-4">
           picked up photography in 2019 with his sister&apos;s old Olympus PEN E-PL6 after wanting a more tactial and
-          true-to-life picture taking experience. Since then, Van has been photographing everything he can from landscape and portrait to event and toy photography. He has also stuck with the relatively niche Micro Four Thirds mount, eventually graduating to a Olympus OM-D E-M1 Mark II with several prime and zoom lenses.
+          true-to-life picture taking experience. Since then, Van has been photographing everything he can from landscape and portrait, to event and toy photography. Sticking with the Micro Four Thirds mount, he eventually graduated to a Olympus OM-D E-M1 Mark II with several prime and zoom lenses.
         </p>
         <p>
           Outside of photography, Van is a software engineer by day and spends his free time building Gundam model kits, playing video games with a particular bias towards Nintendo, and hanging out with family and friends.
@@ -48,7 +48,6 @@ export default function AboutPage() {
                 <span className="w-1.5 h-1.5 rounded-full bg-text-light shrink-0 self-center" />
                 <div>
                   <span className="text-text-main font-semibold">Olympus OM-D E-M1 Mark II</span>
-                  <span className="block text-[10px] text-text-light uppercase mt-0.5">Primary Body</span>
                 </div>
               </li>
               <li className="flex items-baseline gap-2">
@@ -71,7 +70,7 @@ export default function AboutPage() {
               </li>
               <li className="flex items-baseline gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-text-light shrink-0 self-center" />
-                <span>Lumix 35-100mm f2.8</span>
+                <span>Lumix 35-100mm f/2.8 II</span>
               </li>
               <li className="flex items-baseline gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-text-light shrink-0 self-center" />
@@ -104,10 +103,6 @@ export default function AboutPage() {
               <li className="flex items-baseline gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-text-light shrink-0 self-center" />
                 <span>Manfrotto Mini Travel Tripod</span>
-              </li>
-              <li className="flex items-baseline gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-text-light shrink-0 self-center" />
-                <span>K&F Concept Photo Studio Light Box</span>
               </li>
             </ul>
           </div>
